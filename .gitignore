@@ -1,11 +1,9 @@
-# ملفات التخزين المؤقت لـ Python
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 
-# ملفات PyInstaller
+# PyInstaller
 build/
 dist/
 *.spec
-
-# البيانات المنتجة
-*.csv
+*.exe
