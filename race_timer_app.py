@@ -8,7 +8,7 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-import threading, time, csv, os, sys, winsound
+import threading, time, csv, os, sys, winsound, json
 from datetime import datetime
 from PIL import Image, ImageTk
 
@@ -65,7 +65,7 @@ def btn(parent, text, cmd, bg, fg, px=12, py=7, font_size=10):
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Race Timer Pro — Legendary Edition")
+        self.root.title("Nabtakir - نبتكر")
         self.root.configure(bg=C["bg"])
 
         # محاولة تحميل الأيقونة
@@ -81,10 +81,13 @@ class App:
         x, y = int((ws/2) - (w/2)), int((hs/2) - (h/2) - 40)
         self.root.geometry(f"{w}x{h}+{x}+{y}")
         self.root.minsize(850, 650)
+        
+        # العرض في شكل مكتب (تكبير الشاشة ملء الشاشة)
+        self.root.state('zoomed')
 
         self.ser        = None
         self.connected  = False
-        self.racers     = []
+        self._load_data()
         self.curr       = 0
         self.racing     = False
         self.armed      = False
@@ -108,12 +111,30 @@ class App:
 
         self._page_port()
 
+    def _load_data(self):
+        self.data_file = resource_path("nabtakir_data.json")
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, "r", encoding="utf-8") as f:
+                    self.racers = json.load(f)
+            else:
+                self.racers = []
+        except:
+            self.racers = []
+
+    def _save_data(self):
+        try:
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump(self.racers, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Error saving data: {e}")
+
     def _topbar(self):
         bar = tk.Frame(self.root, bg=C["panel"], height=60)
         bar.pack(fill="x")
         bar.pack_propagate(False)
 
-        tk.Label(bar, text="  ⏱  RACE TIMER PRO",
+        tk.Label(bar, text="  ⏱  NABTAKIR - نبتكر",
                  font=("Segoe UI", 16, "bold"),
                  bg=C["panel"], fg=C["accent"]).pack(side="left", pady=14)
 
@@ -175,8 +196,8 @@ class App:
         else:
             tk.Label(card, text="⏱", font=("Segoe UI", 72), bg=C["card"], fg=C["accent"]).pack()
 
-        tk.Label(card, text="Race Timer Pro", font=("Segoe UI", 28, "bold"), bg=C["card"], fg=C["text"]).pack()
-        tk.Label(card, text="النسخة الأسطورية — اختر المنفذ للبدء", font=("Segoe UI", 12), bg=C["card"], fg=C["muted"]).pack(pady=(4, 35))
+        tk.Label(card, text="تطبيق نبتكر (Nabtakir)", font=("Segoe UI", 28, "bold"), bg=C["card"], fg=C["text"]).pack()
+        tk.Label(card, text="إدارة السباقات الذكية — اختر المنفذ للبدء", font=("Segoe UI", 12), bg=C["card"], fg=C["muted"]).pack(pady=(4, 35))
 
         row = tk.Frame(card, bg=C["card"])
         row.pack()
@@ -257,6 +278,7 @@ class App:
         if not name: return
         self.racers.append({"name": name, "ms": None, "state": "waiting"})
         self.ent.delete(0, tk.END)
+        self._save_data()
         self._render_list()
         if self.racers: self.btn_go.config(bg=C["accent"], fg=C["bg"])
 
@@ -275,6 +297,7 @@ class App:
 
     def _del_racer(self, i):
         self.racers.pop(i)
+        self._save_data()
         self._render_list()
         if not self.racers: self.btn_go.config(bg=C["dim"], fg=C["muted"])
 
@@ -282,6 +305,7 @@ class App:
         self._clear()
         self.curr = 0; self.racing = False; self.armed = False
         for r in self.racers: r["ms"] = None; r["state"] = "waiting"
+        self._save_data()
         
         main = tk.Frame(self.frame, bg=C["bg"])
         main.pack(fill="both", expand=True, padx=40, pady=30)
@@ -335,14 +359,15 @@ class App:
         self.racing = False
         self.racers[self.curr]["ms"] = ms
         self.racers[self.curr]["state"] = "done"
+        self._save_data()
         winsound.Beep(1000, 200)
-        self.after(2000, lambda: self._activate(self.curr + 1))
+        self.root.after(2000, lambda: self._activate(self.curr + 1))
 
     def _restart_race(self): self._activate(self.curr)
     def _demo_curr(self):
         self._on_start()
         d = 3000 + int(time.time()*1000)%5000
-        self.after(d, lambda: self._on_stop(d))
+        self.root.after(d, lambda: self._on_stop(d))
 
     def _page_results(self):
         self._clear()
