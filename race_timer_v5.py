@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║   Nabtakir — RACE TIMER PRO  v6.0 (Controller Edition)      ║
+║   Nabtakir — RACE TIMER PRO  v6.1 (ULTRA FAST)             ║
 ║   بُني على أحدث معايير واجهات المستخدم وتجربة السباق       ║
 ║   المميزات: لوحة تحكم متكاملة، كود مدمج، استقرار عالي     ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -19,23 +19,19 @@ try:
 except ImportError:
     SERIAL_OK = False
 
-APP_VERSION    = "6.0"
+APP_VERSION    = "6.1"
 # كود الأردوينو المدمج (للحفظ اليدوي)
 ARDUINO_CODE_EMBEDDED = """
-// RACE TIMER ARDUINO CODE v6.0
+// RACE TIMER ARDUINO CODE v6.1 (ULTRA FAST)
 #define TRIG1 2
 #define ECHO1 3
 #define TRIG2 4
 #define ECHO2 5
-#define DETECT_CM 25
-#define DEBOUNCE 400
-
-long lastTime = 0;
-bool armed = false;
-unsigned long start_ms = 0;
+#define DETECT_CM 35
+#define DEBOUNCE 100
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(TRIG1, OUTPUT); pinMode(ECHO1, INPUT);
   pinMode(TRIG2, OUTPUT); pinMode(ECHO2, INPUT);
   Serial.println("READY");
@@ -43,38 +39,30 @@ void setup() {
 
 long readCM(int tr, int ec) {
   digitalWrite(tr, LOW); delayMicroseconds(2);
-  digitalWrite(tr, HIGH); delayMicroseconds(10);
+  digitalWrite(tr, HIGH); delayMicroseconds(5);
   digitalWrite(tr, LOW);
-  long dur = pulseIn(ec, HIGH, 20000);
-  return (dur == 0) ? -1 : dur * 0.034 / 2;
+  long dur = pulseIn(ec, HIGH, 15000); 
+  return (dur <= 0) ? -1 : dur * 0.034 / 2;
 }
 
 void loop() {
   if(Serial.available()){
     String cmd = Serial.readStringUntil('\\n');
     cmd.trim();
-    if(cmd == "ARM") { armed = true; Serial.println("ARMED_OK"); }
-    if(cmd == "RESET") { armed = false; Serial.println("RESET_OK"); }
-  }
-
-  if(armed){
-    long d1 = readCM(TRIG1, ECHO1);
-    if(d1 > 0 && d1 < DETECT_CM && millis()-lastTime > DEBOUNCE){
-       start_ms = millis();
-       lastTime = millis();
-       Serial.println("START");
-       armed = false; // Stop checking start sensor
-       while(true){ // Wait for end sensor
-          long d2 = readCM(TRIG2, ECHO2);
-          if(d2 > 0 && d2 < DETECT_CM && millis()-lastTime > DEBOUNCE){
-             unsigned long total = millis() - start_ms;
-             Serial.print("TIME:"); Serial.println(total);
-             lastTime = millis();
-             break;
+    if(cmd == "ARM")   { Serial.println("ARMED_OK"); while(true){
+      if(readCM(TRIG1, ECHO1) < DETECT_CM && readCM(TRIG1, ECHO1) > 0){
+        unsigned long t0 = millis();
+        Serial.println("START");
+        while(true){
+          if(readCM(TRIG2, ECHO2) < DETECT_CM && readCM(TRIG2, ECHO2) > 0){
+            Serial.print("TIME:"); Serial.println(millis()-t0);
+            return; 
           }
-          if(Serial.available()) break; // Exit if new command
-       }
-    }
+          if(Serial.available()) return;
+        }
+      }
+      if(Serial.available()) return;
+    }}
   }
 }
 """
@@ -128,6 +116,11 @@ def L(key, lang="ar", **kw):
     t = STRINGS.get(lang, STRINGS["ar"]).get(key, key)
     return t.format(**kw) if kw else t
 
+def resource_path(relative_path):
+    try: base_path = sys._MEIPASS
+    except Exception: base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 def fmt(ms:int)->str:
     return f"{ms//60000:02d}:{(ms%60000)//1000:02d}.{ms%1000:03d}"
 
@@ -140,6 +133,12 @@ class App:
         self.is_dark = self.settings.get("theme", "dark") == "dark"
         self._update_colors()
         
+        self.icon_path = resource_path("icon.ico")
+        try:
+            if os.path.exists(self.icon_path):
+                self.root.iconbitmap(self.icon_path)
+        except: pass
+
         self.root.title(L("title", self.lang))
         self.root.configure(bg=C["bg"])
         self.root.state("zoomed")
@@ -166,7 +165,7 @@ class App:
         p = os.path.join(os.getenv("LOCALAPPDATA", "."), "NabtakirV6")
         os.makedirs(p, exist_ok=True)
         self.set_file = os.path.join(p, "settings.json")
-        self.settings = {"theme":"dark", "lang":"ar", "port":"", "baud":"9600"}
+        self.settings = {"theme":"dark", "lang":"ar", "port":"", "baud":"115200"}
         if os.path.exists(self.set_file):
             try:
                 with open(self.set_file, "r") as f: self.settings.update(json.load(f))
@@ -233,7 +232,7 @@ class App:
         if not port: return
         try:
             if SERIAL_OK:
-                self.ser = serial.Serial(port, 9600, timeout=0.1)
+                self.ser = serial.Serial(port, 115200, timeout=0.05)
                 self.connected = True
                 self.lbl_conn.config(text=f"{L('conn_on', self.lang)}: {port}", fg=C["green"])
                 threading.Thread(target=self._serial_loop, daemon=True).start()
@@ -418,7 +417,7 @@ class App:
             except: break
 
     def _send(self, cmd):
-        if self.ser: self.ser.write(f"{cmd}\n".encode())
+        if self.ser: self.ser.write(f"{cmd}\\n".encode())
 
     def _toggle_lang(self):
         self.lang = "en" if self.lang=="ar" else "ar"
