@@ -97,3 +97,4 @@ long readCM(int trig, int echo) {
   if (dur == 0) return -1;
   return dur * 0.034 / 2;
 }
+
